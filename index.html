@@ -3,90 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 + FPGA Video Filter Controller</title>
+    <title>FPGA Filter Controller</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+<body class="bg-slate-900 text-slate-100 min-h-screen">
 
     <div id="app" class="max-w-4xl mx-auto p-6">
-        <!-- Header -->
-        <header class="border-b border-slate-700 pb-4 mb-8 flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold tracking-wide text-indigo-400">FPGA Video Processor</h1>
-                <p class="text-xs text-slate-400 mt-1">Hosted on ESP32 Local Server</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="h-2 w-2 rounded-full" :class="connectionStatus ? 'bg-emerald-500' : 'bg-rose-500'"></span>
-                <span class="text-sm font-medium text-slate-300">{{ connectionStatus ? 'Connected to Board' : 'Disconnected' }}</span>
-            </div>
+        <header class="border-b border-slate-700 pb-4 mb-8">
+            <h1 class="text-2xl font-bold text-indigo-400">FPGA Filter Controller</h1>
         </header>
 
-        <main class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Left Panel: Filter Selection & Tuning -->
-            <section class="md:col-span-1 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-xl flex flex-col justify-between">
-                <div>
-                    <h2 class="text-lg font-semibold mb-4 text-slate-200">Filter Configuration</h2>
-                    
-                    <!-- Filter Type Dropdown -->
-                    <div class="mb-5">
-                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Filter Type</label>
-                        <select v-model="selectedFilter" @change="updateHardware" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
-                            <option v-for="(filter, key) in filters" :key="key" :value="key">
-                                {{ filter.name }}
-                            </option>
-                        </select>
-                    </div>
+        <main class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <section class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Filter Type</label>
+                <select v-model="selectedFilter" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 mb-4">
+                    <option v-for="(filter, key) in filters" :key="key" :value="key">{{ filter.name }}</option>
+                </select>
 
-                    <!-- Dynamic Parameters based on selection -->
-                    <div v-if="filters[selectedFilter].params.length > 0">
-                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Parameters</label>
-                        <div v-for="param in filters[selectedFilter].params" :key="param.name" class="mb-4">
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-slate-300">{{ param.label }}</span>
-                                <span class="font-mono text-indigo-400">{{ param.value }}</span>
-                            </div>
-                            <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value" @input="updateHardware" class="w-full accent-indigo-500 bg-slate-700 h-1.5 rounded-lg appearance-none cursor-pointer">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Live Status / Metadata -->
-                <div class="pt-4 border-t border-slate-700 mt-6 text-xs text-slate-400 space-y-1">
-                    <div class="flex justify-between"><span>Active Register:</span> <span class="font-mono text-slate-200">0x{{ filters[selectedFilter].regId.toString(16).toUpperCase() }}</span></div>
-                    <div class="flex justify-between"><span>FPGA Latency:</span> <span class="font-mono text-emerald-400">&lt; 0.5ms</span></div>
+                <div v-for="param in filters[selectedFilter].params" :key="param.name" class="mb-4">
+                    <label class="text-xs text-slate-300">{{ param.label }}: {{ param.value }}</label>
+                    <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value" @change="updateHardware" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
                 </div>
             </section>
 
-            <!-- Right Panel: Live Feed Simulation & Mock Controls -->
-            <section class="md:col-span-2 space-y-6">
-                <!-- Monitor Simulation Viewport -->
-                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl">
-                    <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Monitor Output Preview</h2>
-                        <span class="text-xs bg-slate-700 px-2 py-0.5 rounded text-indigo-300 font-mono">HDMI / VGA Out</span>
-                    </div>
-                    
-                    <!-- Simulated Video Monitor Box -->
-                    <div class="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center border border-slate-900 group">
-                        <div class="absolute inset-0 transition-all duration-300 flex items-center justify-center font-bold text-xl tracking-widest uppercase select-none" :style="previewStyle">
-                            <span class="bg-slate-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700 text-sm tracking-normal font-normal normal-case">
-                                Active Filter: <strong class="text-indigo-400">{{ filters[selectedFilter].name }}</strong>
-                            </span>
-                        </div>
-                        <!-- Canvas grid overlay to mimic a physical LCD pixel array -->
-                        <div class="absolute inset-0 bg-[linear-gradient(rgba(18,24,38,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(18,24,38,0.05)_1px,transparent_1px)] bg-[size:4px_4px] pointer-events-none"></div>
-                    </div>
-                </div>
-
-                <!-- Console / Payload Log -->
-                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs">
-                    <div class="text-slate-400 mb-2 flex justify-between items-center">
-                        <span>SPI/UART JSON Payload (Sent to ESP32):</span>
-                        <span class="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-amber-400">POST /api/config</span>
-                    </div>
-                    <pre class="text-indigo-300 overflow-x-auto p-2 bg-slate-900/50 rounded border border-slate-900">{{ currentPayload }}</pre>
-                </div>
+            <section class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <h2 class="text-sm font-semibold text-slate-400 mb-4">Transmission Log</h2>
+                <pre class="text-indigo-300 bg-slate-900 p-3 rounded font-mono text-xs">{{ currentPayload }}</pre>
+                <button @click="updateHardware" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg font-bold transition">Sync to FPGA</button>
             </section>
         </main>
     </div>
@@ -96,74 +40,39 @@
 
         createApp({
             setup() {
-                const connectionStatus = ref(true);
-                const selectedFilter = ref('bypass');
+                const selectedFilter = ref('kernel');
+                const esp32Ip = "192.168.1.50"; // CHANGE THIS to your ESP32's actual IP
 
-                // Available filters, hardware registers mappings, and parameters
                 const filters = ref({
-                    bypass: { name: 'Bypass (No Filter)', regId: 0x00, params: [], style: {} },
-                    grayscale: { name: 'Grayscale', regId: 0x01, params: [], style: { filter: 'grayscale(1)' } },
-                    threshold: { 
-                        name: 'Binary Threshold', 
-                        regId: 0x02, 
-                        params: [{ name: 'limit', label: 'Threshold Limit', min: 0, max: 255, step: 1, value: 128 }],
-                        style: {} 
-                    },
-                    invert: { name: 'Invert Colors', regId: 0x03, params: [], style: { filter: 'invert(1)' } },
-                    brightness: { 
-                        name: 'Brightness Adjust', 
-                        regId: 0x04, 
-                        params: [{ name: 'gain', label: 'Gain Factor', min: 0, max: 3, step: 0.1, value: 1.5 }],
-                        style: {} 
-                    },
                     kernel: { 
                         name: 'Edge Detection (Sobel)', 
                         regId: 0x05, 
-                        params: [{ name: 'sensitivity', label: 'Edge Sensitivity', min: 1, max: 10, step: 1, value: 5 }],
-                        style: { filter: 'contrast(3) saturate(0) invert(1)' } 
+                        params: [{ name: 'limit', label: 'Threshold', min: 0, max: 255, step: 1, value: 128 }] 
                     }
                 });
 
-                // Computes the CSS style to manipulate the frontend mockup view dynamically
-                const previewStyle = computed(() => {
-                    const current = filters.value[selectedFilter.value];
-                    if (selectedFilter.value === 'threshold') {
-                        const val = current.params[0].value;
-                        return { filter: `contrast(${val / 32}) grayscale(1)` };
-                    }
-                    if (selectedFilter.value === 'brightness') {
-                        const val = current.params[0].value;
-                        return { filter: `brightness(${val})` };
-                    }
-                    return current.style || {};
-                });
-
-                // Formats the live configuration state to show what will be transmitted to the ESP32
                 const currentPayload = computed(() => {
                     const current = filters.value[selectedFilter.value];
-                    const payload = {
+                    return JSON.stringify({
                         filter_id: current.regId,
-                        params: current.params.reduce((acc, p) => {
-                            acc[p.name] = p.value;
-                            return acc;
-                        }, {})
-                    };
-                    return JSON.stringify(payload, null, 2);
+                        params: current.params.reduce((acc, p) => ({ ...acc, [p.name]: p.value }), {})
+                    }, null, 2);
                 });
 
-                // Debounced/Throttled style hardware transmission function
-                const updateHardware = () => {
-                    console.log("Transmitting state payload to ESP32: ", currentPayload.value);
+                const updateHardware = async () => {
+                    try {
+                        const response = await fetch(`http://${esp32Ip}/api/config`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: currentPayload.value
+                        });
+                        if (response.ok) alert("FPGA Updated Successfully");
+                    } catch (err) {
+                        console.error("Transmission failed:", err);
+                    }
                 };
 
-                return {
-                    connectionStatus,
-                    selectedFilter,
-                    filters,
-                    previewStyle,
-                    currentPayload,
-                    updateHardware
-                };
+                return { selectedFilter, filters, currentPayload, updateHardware };
             }
         }).mount('#app');
     </script>
